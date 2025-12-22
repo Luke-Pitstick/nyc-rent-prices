@@ -1,0 +1,17 @@
+[project]
+name = "nyc-rent-prices"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "ipykernel>=7.1.0",
+    "matplotlib>=3.10.7",
+    "pandas>=2.3.3",
+    "plotly>=6.5.0",
+    "pmdarima>=2.1.1",
+    "prophet>=1.2.1",
+    "scikit-learn>=1.7.2",
+    "seaborn>=0.13.2",
+    "statsforecast>=2.0.3",
+]
