@@ -757,6 +757,7 @@ dependencies = [
     { name = "scikit-learn" },
     { name = "seaborn" },
     { name = "statsforecast" },
+    { name = "tqdm" },
 ]
 
 [package.dev-dependencies]
@@ -779,6 +780,7 @@ requires-dist = [
     { name = "scikit-learn", specifier = ">=1.7.2" },
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "statsforecast", specifier = ">=2.0.3" },
+    { name = "tqdm", specifier = ">=4.67.1" },
 ]
 
 [package.metadata.requires-dev]
