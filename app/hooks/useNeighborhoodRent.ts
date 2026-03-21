@@ -20,19 +20,36 @@ export type RentSeriesResponse = {
   forecasts: RentForecastRow[];
 };
 
+function apiUrl(path: string): string {
+  const base =
+    typeof import.meta !== "undefined" &&
+    import.meta.env &&
+    typeof (import.meta.env as { PUBLIC_API_BASE?: string }).PUBLIC_API_BASE === "string"
+      ? (import.meta.env as { PUBLIC_API_BASE: string }).PUBLIC_API_BASE.replace(/\/$/, "")
+      : "";
+  return `${base}${path}`;
+}
+
 export async function fetchNeighborhoodRentSeries(
   neighborhood: string,
 ): Promise<RentSeriesResponse> {
   const res = await fetch(
-    `/api/rent-series?neighborhood=${encodeURIComponent(neighborhood)}`,
+    apiUrl(
+      `/api/rent-series?neighborhood=${encodeURIComponent(neighborhood)}`,
+    ),
   );
   const raw = await res.text();
+  if (raw.trimStart().startsWith("<!") || raw.trimStart().startsWith("<html")) {
+    throw new Error(
+      "API returned HTML instead of JSON. On Vercel, deploy serverless routes in /api/ and set DATABASE_URL; ensure vercel.json does not rewrite /api/* to index.html.",
+    );
+  }
   let body: unknown;
   try {
     body = raw ? JSON.parse(raw) : null;
   } catch {
     throw new Error(
-      "Bad response from /api/rent-series (not JSON). Check that the Bun server exposes this route.",
+      "Bad response from /api/rent-series (not JSON). Use Bun locally or Vercel with api/rent-series.ts.",
     );
   }
   if (!res.ok) {

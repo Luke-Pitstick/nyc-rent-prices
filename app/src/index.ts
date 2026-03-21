@@ -28,10 +28,7 @@ const server = serve({
       });
     },
 
-    /**
-     * Historic monthly medians + forecast rows for one canonical neighborhood.
-     * Historic table: `neighborhood_medians` (date, areaname, median_price) — adjust in Neon if yours differs.
-     */
+    /** Same handler as Vercel `api/rent-series.ts` — local Bun dev. */
     "/api/rent-series": {
       async GET(req: Request) {
         const url = new URL(req.url);
@@ -49,38 +46,9 @@ const server = serve({
           );
         }
         try {
-          const { getNeonSql } = await import("./lib/neon");
-          const sql = getNeonSql();
-          let historic: Record<string, unknown>[];
-          try {
-            historic = await sql`
-              SELECT date::text AS date, median_price::float8 AS median_price
-              FROM neighborhood_medians
-              WHERE lower(trim(areaname)) = lower(trim(${neighborhood}))
-              ORDER BY date ASC
-            `;
-          } catch (e) {
-            const code =
-              typeof e === "object" &&
-              e !== null &&
-              "code" in e &&
-              typeof (e as { code?: string }).code === "string"
-                ? (e as { code: string }).code
-                : "";
-            if (code !== "42P01") throw e;
-            historic = await sql`
-              SELECT date::text AS date, median_price::float8 AS median_price
-              FROM neighborhood_median_rent
-              WHERE lower(trim(areaname)) = lower(trim(${neighborhood}))
-              ORDER BY date ASC
-            `;
-          }
-          const forecasts = await sql`
-            SELECT * FROM rent_forecasts
-            WHERE lower(trim(neighborhood)) = lower(trim(${neighborhood}))
-            ORDER BY forecast_date ASC
-          `;
-          return Response.json({ historic, forecasts });
+          const { fetchRentSeriesForNeighborhood } = await import("./lib/rentSeriesServer");
+          const payload = await fetchRentSeriesForNeighborhood(neighborhood);
+          return Response.json(payload);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           return Response.json({ error: message }, { status: 500 });
