@@ -1,14 +1,20 @@
-import { APITester } from "./APITester";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Navbar } from "./components/Navbar";
+import { MapPage } from "./pages/MapPage";
+import { AboutPage } from "./pages/AboutPage";
 import "./index.css";
-
-import logo from "./logo.svg";
-import reactLogo from "./react.svg";
 
 export function App() {
   return (
-    <div className="max-w-7xl mx-auto p-8 text-center relative z-10">
-      
-    </div>
+    <BrowserRouter>
+      <div className="h-screen bg-gray-100 flex flex-col">
+        <Navbar />
+        <Routes>
+          <Route path="/" element={<MapPage />} />
+          <Route path="/about" element={<AboutPage />} />
+        </Routes>
+      </div>
+    </BrowserRouter>
   );
 }
 
