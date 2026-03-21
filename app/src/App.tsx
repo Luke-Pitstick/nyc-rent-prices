@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthorWatermark } from "./components/AuthorWatermark";
 import { Navbar } from "./components/Navbar";
 import { MapPage } from "./pages/MapPage";
 import { AboutPage } from "./pages/AboutPage";
@@ -9,6 +10,7 @@ export function App() {
     <BrowserRouter>
       <div className="h-screen bg-gray-100 flex flex-col">
         <Navbar />
+        <AuthorWatermark />
         <Routes>
           <Route path="/" element={<MapPage />} />
           <Route path="/about" element={<AboutPage />} />

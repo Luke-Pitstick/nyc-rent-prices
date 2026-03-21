@@ -166,13 +166,13 @@ export function NYCNeighborhoodMap({
       maxZoom={18}
       scrollWheelZoom
       zoomControl={false}
+      attributionControl={false}
       className="h-full w-full absolute inset-0"
     >
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
         url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
       />
-      <ZoomControl position="bottomright" />
+      <ZoomControl position="topright" />
       <MapZoomSync
         minZoomBorough={minZoomBorough}
         minZoomNeighborhood={minZoomNeighborhood}

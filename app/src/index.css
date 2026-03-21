@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Default Leaflet attribution bar (disabled in code); hide if a layer ever shows it */
+.leaflet-container .leaflet-control-attribution {
+  display: none !important;
+}
+
 html,
 body,
 #root {
