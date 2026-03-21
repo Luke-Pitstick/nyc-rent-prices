@@ -40,7 +40,7 @@ export function Sidebar({ show, selectedNeighborhood, onClose }: SidebarProps) {
           <h3 className="text-sm font-medium text-gray-500">Median rent</h3>
           <div className="mt-3 rounded-2xl border border-gray-100 bg-gradient-to-br from-gray-50 to-white px-4 py-5">
             <p className="text-3xl font-semibold tabular-nums tracking-tight text-gray-900">
-              $1,000
+              $2,000
               <span className="ml-1 text-base font-medium text-gray-400">/ mo</span>
             </p>
             <p className="mt-2 text-xs leading-relaxed text-gray-500">
