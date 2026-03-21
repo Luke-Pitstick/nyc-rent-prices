@@ -1,4 +1,8 @@
 {
+  "private": true,
+  "scripts": {
+    "build": "cd app && bun run build"
+  },
   "dependencies": {
     "react-router-dom": "^7.11.0"
   }
