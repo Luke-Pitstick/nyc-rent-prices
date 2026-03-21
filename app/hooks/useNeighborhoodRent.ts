@@ -39,17 +39,21 @@ export async function fetchNeighborhoodRentSeries(
     ),
   );
   const raw = await res.text();
-  if (raw.trimStart().startsWith("<!") || raw.trimStart().startsWith("<html")) {
+  const trimmed = raw.trimStart();
+  const looksLikeHtml =
+    trimmed.startsWith("<!") || trimmed.toLowerCase().startsWith("<html");
+  if (looksLikeHtml) {
     throw new Error(
-      "API returned HTML instead of JSON. On Vercel, deploy serverless routes in /api/ and set DATABASE_URL; ensure vercel.json does not rewrite /api/* to index.html.",
+      "API returned HTML instead of JSON. Use `bun run dev` (Bun serves /api/* from src/index.ts), or on Vercel set DATABASE_URL and keep /api/* out of SPA rewrites.",
     );
   }
   let body: unknown;
   try {
     body = raw ? JSON.parse(raw) : null;
   } catch {
+    const preview = raw.slice(0, 160).replace(/\s+/g, " ").trim();
     throw new Error(
-      "Bad response from /api/rent-series (not JSON). Use Bun locally or Vercel with api/rent-series.ts.",
+      `Not JSON from /api/rent-series (status ${res.status}). ${preview ? `Start: ${preview}` : "Empty body."} — Run the app with Bun (npm run dev), not a static file server on dist/.`,
     );
   }
   if (!res.ok) {

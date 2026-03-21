@@ -3,9 +3,7 @@ import index from "./index.html";
 
 const server = serve({
   routes: {
-    // Serve index.html for all unmatched routes.
-    "/*": index,
-
+    // Specific routes first — if `/*` is first, Bun matches it for every path and `/api/*` never runs.
     "/api/hello": {
       async GET(req) {
         return Response.json({
@@ -108,6 +106,9 @@ const server = serve({
         }
       },
     },
+
+    // SPA fallback — must be last.
+    "/*": index,
   },
 
   development: process.env.NODE_ENV !== "production" && {
