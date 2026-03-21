@@ -5,6 +5,11 @@
   display: none !important;
 }
 
+/* Neighborhood polygons: show pointer on hover */
+.leaflet-container .leaflet-overlay-pane path.leaflet-interactive {
+  cursor: pointer;
+}
+
 html,
 body,
 #root {

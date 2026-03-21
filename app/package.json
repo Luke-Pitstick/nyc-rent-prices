@@ -9,6 +9,8 @@
     "build": "bun run build.ts"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.0.2",
+    "@paper-design/shaders-react": "^0.0.72",
     "@turf/area": "^7.3.4",
     "@turf/point-on-feature": "^7.3.4",
     "bun-plugin-tailwind": "^0.1.2",

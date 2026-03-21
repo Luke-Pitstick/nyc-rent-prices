@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -14,6 +14,13 @@ import type { GeoJsonObject, Feature, MultiPolygon, Polygon } from "geojson";
 import area from "@turf/area";
 import pointOnFeature from "@turf/point-on-feature";
 import "leaflet/dist/leaflet.css";
+import ntaToCanonical from "../ntaToCanonicalNeighborhood.json";
+
+const NTA_TO_CANONICAL = ntaToCanonical as Record<string, string>;
+
+function canonicalFromNta(ntaName: string): string {
+  return NTA_TO_CANONICAL[ntaName] ?? ntaName;
+}
 
 /**
  * For MultiPolygon NTAs, Turf's point-on-whole-feature can land on a tiny pier sliver
@@ -145,10 +152,31 @@ function getBoroughColor(borough: string) {
   }
 }
 
+function neighborhoodPolygonStyle(
+  feature: Feature | undefined,
+  selectedCanonical: string | null,
+): L.PathOptions {
+  const borough = String(feature?.properties?.BoroName ?? "");
+  const fillColor = getBoroughColor(borough);
+  const nta = String(feature?.properties?.NTAName ?? "");
+  const canonical = canonicalFromNta(nta);
+  const isSelected = selectedCanonical != null && canonical === selectedCanonical;
+
+  return {
+    fillColor,
+    weight: isSelected ? 3 : 1,
+    opacity: 1,
+    color: isSelected ? "#4c1d95" : "white",
+    fillOpacity: isSelected ? 0.82 : 0.5,
+  };
+}
+
 export type NYCNeighborhoodMapProps = {
   data: GeoJsonObject;
   minZoomBorough?: number;
   minZoomNeighborhood?: number;
+  /** Canonical neighborhood name; matching polygons are highlighted on the map. */
+  selectedNeighborhood?: string | null;
   onNeighborhoodClick?: (neighborhood: string) => void;
 };
 
@@ -156,8 +184,57 @@ export function NYCNeighborhoodMap({
   data,
   minZoomBorough = 10,
   minZoomNeighborhood = 13,
+  selectedNeighborhood = null,
   onNeighborhoodClick,
 }: NYCNeighborhoodMapProps) {
+  const geoJsonRef = useRef<L.GeoJSON | null>(null);
+
+  const mapPolygonStyle = useCallback(
+    (feature?: Feature) => neighborhoodPolygonStyle(feature, selectedNeighborhood),
+    [selectedNeighborhood],
+  );
+
+  const onEachNeighborhood = useCallback(
+    (feature: Feature, layer: L.Layer) => {
+      if (feature.properties && feature.properties.NTAName) {
+        const label = canonicalFromNta(String(feature.properties.NTAName));
+        layer.bindTooltip(label, {
+          permanent: true,
+          direction: "center",
+          className: "neighborhood-label",
+        });
+        const latLng = neighborhoodTooltipLatLng(feature);
+        if (latLng) {
+          layer.getTooltip()?.setLatLng(latLng);
+        }
+      }
+      layer.on({
+        click: () => {
+          const nta = String(feature.properties?.NTAName ?? "");
+          onNeighborhoodClick?.(canonicalFromNta(nta));
+        },
+      });
+    },
+    [onNeighborhoodClick],
+  );
+
+  /** Every matching NTA must be raised above neighbors, or outer edges stay under adjacent polygons. */
+  useEffect(() => {
+    if (selectedNeighborhood == null) return;
+    const id = requestAnimationFrame(() => {
+      const group = geoJsonRef.current;
+      if (!group) return;
+      group.eachLayer((layer) => {
+        const f = (layer as L.Layer & { feature?: Feature }).feature;
+        const nta = f?.properties?.NTAName;
+        if (nta == null) return;
+        if (canonicalFromNta(String(nta)) !== selectedNeighborhood) return;
+        (layer as L.Path).bringToFront();
+      });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [selectedNeighborhood]);
+
   return (
     <MapContainer
       center={[40.7128, -74.006]}
@@ -179,33 +256,10 @@ export function NYCNeighborhoodMap({
       />
       <BoroughNameMarkers />
       <GeoJSON
+        ref={geoJsonRef}
         data={data}
-        style={(feature) => ({
-          fillColor: getBoroughColor(String(feature?.properties?.BoroName ?? "")),
-          weight: 1,
-          opacity: 1,
-          color: "white",
-          fillOpacity: 0.5,
-        })}
-        onEachFeature={(feature: Feature, layer) => {
-          if (feature.properties && feature.properties.NTAName) {
-            const label = String(feature.properties.NTAName);
-            layer.bindTooltip(label, {
-              permanent: true,
-              direction: "center",
-              className: "neighborhood-label",
-            });
-            const latLng = neighborhoodTooltipLatLng(feature);
-            if (latLng) {
-              layer.getTooltip()?.setLatLng(latLng);
-            }
-          }
-          layer.on({
-            click: () => {
-              onNeighborhoodClick?.(String(feature.properties?.NTAName ?? ""));
-            },
-          });
-        }}
+        style={mapPolygonStyle}
+        onEachFeature={onEachNeighborhood}
       />
     </MapContainer>
   );
