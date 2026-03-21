@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getNeonSql } from "../app/src/lib/neon";
+import { getNeonSql } from "./lib/neon.js";
 
 /** @deprecated Prefer `/api/rent-series` */
 export default async function handler(req: VercelRequest, res: VercelResponse) {

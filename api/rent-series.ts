@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { fetchRentSeriesForNeighborhood } from "../app/src/lib/rentSeriesServer";
+import { fetchRentSeriesForNeighborhood } from "./lib/rentSeriesServer.js";
 
 /**
- * Vercel Serverless — must live at repo `api/` when the Vercel project root is the repo root.
+ * Vercel Serverless — lives at repo `api/`. Shared DB logic is under `api/lib/` so it is bundled.
  * Same JSON as Bun `app/src/index.ts` `/api/rent-series`.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {

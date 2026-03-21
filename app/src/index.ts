@@ -44,7 +44,9 @@ const server = serve({
           );
         }
         try {
-          const { fetchRentSeriesForNeighborhood } = await import("./lib/rentSeriesServer");
+          const { fetchRentSeriesForNeighborhood } = await import(
+            "../../api/lib/rentSeriesServer.ts"
+          );
           const payload = await fetchRentSeriesForNeighborhood(neighborhood);
           return Response.json(payload);
         } catch (err) {
@@ -72,7 +74,7 @@ const server = serve({
           );
         }
         try {
-          const { getNeonSql } = await import("./lib/neon");
+          const { getNeonSql } = await import("../../api/lib/neon.ts");
           const sql = getNeonSql();
           const rows = await sql`
             SELECT * FROM rent_forecasts
@@ -96,7 +98,7 @@ const server = serve({
           );
         }
         try {
-          const { getNeonSql } = await import("./lib/neon");
+          const { getNeonSql } = await import("../../api/lib/neon.ts");
           const sql = getNeonSql();
           const rows = await sql`SELECT 1 AS ok`;
           return Response.json({ ok: true, neon: true, rows });
