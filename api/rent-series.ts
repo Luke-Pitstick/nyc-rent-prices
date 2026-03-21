@@ -1,7 +1,10 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getNeonSql } from "../src/lib/neon";
+import { fetchRentSeriesForNeighborhood } from "../app/src/lib/rentSeriesServer";
 
-/** @deprecated Prefer `/api/rent-series` — kept for older clients. */
+/**
+ * Vercel Serverless — must live at repo `api/` when the Vercel project root is the repo root.
+ * Same JSON as Bun `app/src/index.ts` `/api/rent-series`.
+ */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   if (req.method !== "GET") {
@@ -19,12 +22,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
   try {
-    const sql = getNeonSql();
-    const rows = await sql`
-      SELECT * FROM rent_forecasts
-      WHERE lower(trim(neighborhood)) = lower(trim(${neighborhood}))
-    `;
-    res.status(200).json(rows);
+    const payload = await fetchRentSeriesForNeighborhood(neighborhood);
+    res.status(200).json(payload);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });

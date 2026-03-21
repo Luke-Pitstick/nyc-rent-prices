@@ -1,14 +1,11 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { fetchRentSeriesForNeighborhood } from "../src/lib/rentSeriesServer";
+import { getNeonSql } from "../app/src/lib/neon";
 
-/**
- * Vercel Serverless — same JSON as Bun `src/index.ts` `/api/rent-series`.
- * Set `DATABASE_URL` in the Vercel project (same pooled Neon string as local).
- */
+/** @deprecated Prefer `/api/rent-series` */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   if (req.method !== "GET") {
-    res.status(405).json({ error: "Method not allowed!" });
+    res.status(405).json({ error: "Method not allowed" });
     return;
   }
   const raw = req.query.neighborhood;
@@ -22,8 +19,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
   try {
-    const payload = await fetchRentSeriesForNeighborhood(neighborhood);
-    res.status(200).json(payload);
+    const sql = getNeonSql();
+    const rows = await sql`
+      SELECT * FROM rent_forecasts
+      WHERE lower(trim(neighborhood)) = lower(trim(${neighborhood}))
+    `;
+    res.status(200).json(rows);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });

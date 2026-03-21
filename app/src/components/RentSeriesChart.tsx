@@ -1,3 +1,17 @@
+import type { TooltipContentProps } from "recharts";
+import type { TooltipPayloadEntry } from "recharts";
+import {
+  Area,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { HistoricMedianRow, RentForecastRow } from "../../hooks/useNeighborhoodRent";
 
 type RentSeriesChartProps = {
@@ -5,161 +19,273 @@ type RentSeriesChartProps = {
   forecasts: RentForecastRow[];
 };
 
-function parseTime(s: string): number {
-  const t = new Date(s).getTime();
-  return Number.isNaN(t) ? NaN : t;
+type ChartDatum = {
+  t: number;
+  historic: number | null;
+  forecastMean: number | null;
+  loBase: number | null;
+  ciSpread: number | null;
+};
+
+function mergeSeries(historic: HistoricMedianRow[], forecasts: RentForecastRow[]): ChartDatum[] {
+  const keys = new Set<string>();
+  for (const h of historic) keys.add(h.date);
+  for (const f of forecasts) keys.add(f.forecast_date);
+  const sorted = [...keys].sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+  const histBy = Object.fromEntries(historic.map((h) => [h.date, h.median_price]));
+  const fcBy = Object.fromEntries(forecasts.map((f) => [f.forecast_date, f]));
+
+  return sorted.map((date) => {
+    const t = new Date(date).getTime();
+    const historicVal = histBy[date] ?? null;
+    const fc = fcBy[date];
+    const forecastMean = fc?.predicted_mean ?? null;
+    const lo = fc?.lower_ci ?? null;
+    const hi = fc?.upper_ci ?? null;
+    const loBase = lo != null && hi != null ? lo : null;
+    const ciSpread = lo != null && hi != null ? hi - lo : null;
+    return {
+      t,
+      historic: historicVal,
+      forecastMean,
+      loBase,
+      ciSpread,
+    };
+  });
+}
+
+const fmtUsd = (v: number) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(v);
+
+const fmtX = (t: number) =>
+  new Date(t).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+
+function RentTooltip({ active, payload, label }: TooltipContentProps) {
+  if (!active || !payload?.length) return null;
+  const dateLabel =
+    typeof label === "number"
+      ? new Date(label).toLocaleDateString("en-US", { dateStyle: "medium" })
+      : String(label);
+  const rows = payload.filter(
+    (p: TooltipPayloadEntry) => p.dataKey === "historic" || p.dataKey === "forecastMean",
+  );
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs shadow-lg">
+      <p className="mb-1.5 font-medium text-slate-700">{dateLabel}</p>
+      <ul className="space-y-1">
+        {rows.map((p: TooltipPayloadEntry) => {
+          const v = p.value;
+          if (typeof v !== "number") return null;
+          const labelText =
+            p.dataKey === "historic" ? "Median (actual)" : p.dataKey === "forecastMean" ? "Forecast" : String(p.name);
+          return (
+            <li key={String(p.dataKey)} className="flex justify-between gap-6 tabular-nums">
+              <span style={{ color: p.color }}>{labelText}</span>
+              <span className="font-medium text-slate-900">{fmtUsd(v)}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 }
 
 export function RentSeriesChart({ historic, forecasts }: RentSeriesChartProps) {
-  const hPoints = historic
-    .map((r) => ({ t: parseTime(r.date), y: r.median_price }))
-    .filter((p) => !Number.isNaN(p.t));
-  const fMean = forecasts
-    .map((r) => ({
-      t: parseTime(r.forecast_date),
-      mean: r.predicted_mean,
-      lo: r.lower_ci,
-      hi: r.upper_ci,
-    }))
-    .filter((p) => !Number.isNaN(p.t));
+  const data = mergeSeries(historic, forecasts);
+  const last = Math.max(0, data.length - 1);
 
-  if (hPoints.length === 0 && fMean.length === 0) {
-    return (
-      <p className="text-xs text-gray-500">No data to plot for this area.</p>
-    );
-  }
+  const [startIdx, setStartIdx] = useState(0);
+  const [endIdx, setEndIdx] = useState(last);
 
-  const allT = [...hPoints.map((p) => p.t), ...fMean.map((p) => p.t)];
-  const allY = [
-    ...hPoints.map((p) => p.y),
-    ...fMean.flatMap((p) => [p.mean, p.lo, p.hi]),
-  ];
+  useEffect(() => {
+    setStartIdx(0);
+    setEndIdx(Math.max(0, data.length - 1));
+  }, [historic, forecasts, data.length]);
 
-  const tMin = Math.min(...allT);
-  const tMax = Math.max(...allT);
-  const yMin = Math.min(...allY);
-  const yMax = Math.max(...allY);
-  const yPad = (yMax - yMin) * 0.08 || 100;
-  const y0 = yMin - yPad;
-  const y1 = yMax + yPad;
-
-  const w = 280;
-  const chartH = 160;
-  const padL = 42;
-  const padR = 8;
-  const padT = 10;
-  const padB = 28;
-
-  const innerW = w - padL - padR;
-  const innerH = chartH - padT - padB;
-
-  const sx = (t: number) => padL + ((t - tMin) / (tMax - tMin || 1)) * innerW;
-  const sy = (y: number) => padT + (1 - (y - y0) / (y1 - y0 || 1)) * innerH;
-
-  const histSorted = [...hPoints].sort((a, b) => a.t - b.t);
-  const histPath =
-    histSorted.length > 0
-      ? histSorted
-          .map((p, i) => `${i === 0 ? "M" : "L"} ${sx(p.t).toFixed(1)} ${sy(p.y).toFixed(1)}`)
-          .join(" ")
-      : "";
-
-  const meanSorted = [...fMean].sort((a, b) => a.t - b.t);
-  const meanPath =
-    meanSorted.length > 0
-      ? meanSorted
-          .map((p, i) => `${i === 0 ? "M" : "L"} ${sx(p.t).toFixed(1)} ${sy(p.mean).toFixed(1)}`)
-          .join(" ")
-      : "";
-
-  let ciPolygon = "";
-  if (meanSorted.length >= 2) {
-    const forward = meanSorted.map((p) => `${sx(p.t).toFixed(1)} ${sy(p.hi).toFixed(1)}`);
-    const back = [...meanSorted].reverse().map((p) => `${sx(p.t).toFixed(1)} ${sy(p.lo).toFixed(1)}`);
-    ciPolygon = `M ${forward[0]} ${forward.slice(1).map((t) => `L ${t}`).join(" ")} ${back.map((t) => `L ${t}`).join(" ")} Z`;
-  }
-
-  const fmtY = (v: number) =>
-    new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      maximumFractionDigits: 0,
-    }).format(v);
-
-  const fmtX = (t: number) =>
-    new Date(t).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
-
-  const xTicks = 4;
-  const tickTs = Array.from({ length: xTicks }, (_, i) =>
-    tMin + ((tMax - tMin) * i) / (xTicks - 1 || 1),
+  const visible = useMemo(
+    () => (data.length === 0 ? [] : data.slice(startIdx, endIdx + 1)),
+    [data, startIdx, endIdx],
   );
 
+  const setFullRange = useCallback(() => {
+    setStartIdx(0);
+    setEndIdx(last);
+  }, [last]);
+
+  const setRecentHalf = useCallback(() => {
+    if (data.length <= 2) {
+      setFullRange();
+      return;
+    }
+    const cut = Math.floor(data.length / 2);
+    setStartIdx(cut);
+    setEndIdx(last);
+  }, [data.length, last, setFullRange]);
+
+  const onStartChange = useCallback(
+    (v: number) => {
+      const next = Math.min(v, endIdx - 1);
+      setStartIdx(Math.max(0, next));
+    },
+    [endIdx],
+  );
+
+  const onEndChange = useCallback(
+    (v: number) => {
+      const next = Math.max(v, startIdx + 1);
+      setEndIdx(Math.min(last, next));
+    },
+    [last, startIdx],
+  );
+
+  if (data.length === 0) {
+    return <p className="text-xs text-gray-500">No data to plot for this area.</p>;
+  }
+
+  const startLabel = fmtX(data[startIdx]!.t);
+  const endLabel = fmtX(data[endIdx]!.t);
+  const isFullRange = startIdx === 0 && endIdx === last;
+
   return (
-    <div className="w-full overflow-hidden">
-      <svg
-        viewBox={`0 0 ${w} ${chartH}`}
-        className="h-auto w-full max-w-full"
-        role="img"
-        aria-label="Median rent history and forecast"
-      >
-        <rect x={0} y={0} width={w} height={chartH} fill="transparent" />
-        {ciPolygon && (
-          <path d={ciPolygon} fill="rgb(139 92 246 / 0.15)" stroke="none" />
-        )}
-        {histPath && (
-          <path
-            d={histPath}
-            fill="none"
-            stroke="rgb(59 130 246)"
-            strokeWidth={2}
-            strokeLinejoin="round"
-            strokeLinecap="round"
+    <div className="w-full" style={{ minHeight: 280 }}>
+      <ResponsiveContainer width="100%" height={260}>
+        <ComposedChart data={visible} margin={{ top: 4, right: 4, left: -12, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgb(226 232 240)" vertical={false} />
+          <XAxis
+            type="number"
+            dataKey="t"
+            domain={["dataMin", "dataMax"]}
+            tickFormatter={fmtX}
+            tick={{ fontSize: 10, fill: "#64748b" }}
+            tickLine={false}
+            axisLine={{ stroke: "#e2e8f0" }}
           />
-        )}
-        {meanPath && (
-          <path
-            d={meanPath}
-            fill="none"
+          <YAxis
+            tickFormatter={(v) => `$${Math.round(v / 1000)}k`}
+            tick={{ fontSize: 10, fill: "#64748b" }}
+            tickLine={false}
+            axisLine={{ stroke: "#e2e8f0" }}
+            width={44}
+            domain={["auto", "auto"]}
+          />
+          <Tooltip content={(props) => <RentTooltip {...props} />} />
+          <Legend
+            wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
+            formatter={(value) => {
+              if (value === "historic") return "Median (actual)";
+              if (value === "forecastMean") return "Forecast";
+              if (value === "ciSpread") return "95% CI (band)";
+              return value;
+            }}
+          />
+          <Area
+            type="monotone"
+            dataKey="loBase"
+            stackId="ci"
+            stroke="none"
+            fill="transparent"
+            fillOpacity={0}
+            legendType="none"
+            isAnimationActive={false}
+          />
+          <Area
+            type="monotone"
+            dataKey="ciSpread"
+            stackId="ci"
+            stroke="none"
+            fill="rgb(139 92 246)"
+            fillOpacity={0.22}
+            name="ciSpread"
+            connectNulls
+            isAnimationActive={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="historic"
+            stroke="rgb(37 99 235)"
+            strokeWidth={2}
+            dot={false}
+            activeDot={{ r: 5 }}
+            connectNulls
+            name="historic"
+          />
+          <Line
+            type="monotone"
+            dataKey="forecastMean"
             stroke="rgb(109 40 217)"
             strokeWidth={2}
-            strokeDasharray="5 4"
-            strokeLinejoin="round"
-            strokeLinecap="round"
+            strokeDasharray="6 4"
+            dot={false}
+            activeDot={{ r: 5 }}
+            connectNulls
+            name="forecastMean"
           />
-        )}
-        <text x={padL - 4} y={sy(y1)} textAnchor="end" className="fill-gray-400" fontSize={9}>
-          {fmtY(y1)}
-        </text>
-        <text x={padL - 4} y={sy(y0)} textAnchor="end" className="fill-gray-400" fontSize={9}>
-          {fmtY(y0)}
-        </text>
-        {tickTs.map((t, i) => (
-          <text
-            key={i}
-            x={sx(t)}
-            y={chartH - 6}
-            textAnchor="middle"
-            className="fill-gray-400"
-            fontSize={8}
-          >
-            {fmtX(t)}
-          </text>
-        ))}
-      </svg>
-      <div className="mt-2 flex flex-wrap gap-3 text-[10px] text-gray-600">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-0.5 w-4 bg-blue-500" />
-          Actual median
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span
-            className="inline-block h-0.5 w-4 border-t-2 border-dotted border-violet-700"
-            style={{ borderColor: "rgb(109 40 217)" }}
-          />
-          Forecast
-        </span>
-        <span className="text-gray-400">Shaded: 95% CI</span>
+        </ComposedChart>
+      </ResponsiveContainer>
+
+      <div className="mt-3 space-y-3 rounded-xl border border-slate-200/90 bg-slate-50/80 px-3 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            Time window
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={setFullRange}
+              disabled={isFullRange}
+              className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm ring-1 ring-slate-200/80 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Full range
+            </button>
+            <button
+              type="button"
+              onClick={setRecentHalf}
+              disabled={data.length <= 2}
+              className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm ring-1 ring-slate-200/80 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Last half
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500">
+            <span className="tabular-nums">From {startLabel}</span>
+            <span className="tabular-nums">To {endLabel}</span>
+          </div>
+          <label className="block text-[10px] font-medium text-slate-500">
+            Start
+            <input
+              type="range"
+              min={0}
+              max={Math.max(0, endIdx - 1)}
+              value={startIdx}
+              onChange={(e) => onStartChange(Number(e.target.value))}
+              className="mt-1 h-2 w-full cursor-pointer accent-blue-600"
+            />
+          </label>
+          <label className="block text-[10px] font-medium text-slate-500">
+            End
+            <input
+              type="range"
+              min={Math.min(last, startIdx + 1)}
+              max={last}
+              value={endIdx}
+              onChange={(e) => onEndChange(Number(e.target.value))}
+              className="mt-1 h-2 w-full cursor-pointer accent-violet-600"
+            />
+          </label>
+        </div>
       </div>
+
+      <p className="mt-2 text-center text-[10px] text-gray-400">
+        Adjust sliders to zoom the chart · Hover points for values
+      </p>
     </div>
   );
 }
